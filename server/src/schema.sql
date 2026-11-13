@@ -204,3 +204,125 @@ INSERT INTO system_params(key, value) VALUES
   ('waste_window_hour', '12'),             -- 报损补录窗口：次日 12:00 前
   ('rounding', 'ceil_to_min_order_unit')   -- 建议量向上取整到最小订货单位
 ON CONFLICT (key) DO NOTHING;
+
+-- ===== 配送异常应急订货推演 =====
+-- 应急推演会话：同一（门店, 到货日）一个；input_revision 为输入修订号，
+-- 任何供货/收货/优先级变化都自增，旧计算据此立即失效。
+CREATE TABLE IF NOT EXISTS emergency_cases (
+  id                 SERIAL PRIMARY KEY,
+  store_id           INT NOT NULL REFERENCES stores(id),
+  arrival_date       DATE NOT NULL,
+  input_revision     INT NOT NULL DEFAULT 1,
+  demand_multiplier  NUMERIC NOT NULL DEFAULT 1.2,
+  original_order_late BOOLEAN NOT NULL DEFAULT FALSE,
+  priorities         JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(store_id, arrival_date)
+);
+
+-- 货源登记：整箱规格、替代比例、到达时刻、重量、冷藏容积；不可换算或晚于销售时段的货源被排除并说明
+CREATE TABLE IF NOT EXISTS emergency_sources (
+  id                SERIAL PRIMARY KEY,
+  case_id           INT NOT NULL REFERENCES emergency_cases(id) ON DELETE CASCADE,
+  code              TEXT NOT NULL,
+  supplier          TEXT NOT NULL,
+  sku_id            INT NOT NULL REFERENCES skus(id),
+  target_sku_id     INT NOT NULL REFERENCES skus(id),
+  available_boxes   INT NOT NULL,
+  units_per_box     NUMERIC NOT NULL,
+  substitution_ratio NUMERIC NOT NULL DEFAULT 1,
+  arrival_time      TEXT NOT NULL,
+  weight_per_box    NUMERIC NOT NULL,
+  volume_per_box    NUMERIC NOT NULL,
+  source_unit       TEXT NOT NULL DEFAULT '箱',
+  vehicle_slot      TEXT NOT NULL,
+  unit_cost         NUMERIC NOT NULL DEFAULT 0,   -- 每箱采购成本（应急单费用 = 箱数 × 单位成本 + 运费）
+  delay_hours       NUMERIC NOT NULL DEFAULT 0,
+  status            TEXT NOT NULL DEFAULT 'registered',  -- registered / excluded
+  exclude_reason    TEXT,
+  note              TEXT,
+  created_by        TEXT NOT NULL,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(case_id, code)
+);
+
+-- 收货事件：以 receipt_key 幂等，重复回执不再增加库存
+CREATE TABLE IF NOT EXISTS emergency_receipts (
+  id             SERIAL PRIMARY KEY,
+  case_id        INT NOT NULL REFERENCES emergency_cases(id) ON DELETE CASCADE,
+  source_id      INT NOT NULL REFERENCES emergency_sources(id),
+  receipt_key    TEXT NOT NULL,
+  boxes          NUMERIC NOT NULL,
+  arrival_time   TEXT NOT NULL,
+  received_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(case_id, receipt_key)
+);
+
+-- 计算方案：浏览器组合搜索的结果回传入库；input_revision 对不上即拒绝（迟到的搜索结果）
+CREATE TABLE IF NOT EXISTS emergency_plans (
+  id             SERIAL PRIMARY KEY,
+  case_id        INT NOT NULL REFERENCES emergency_cases(id) ON DELETE CASCADE,
+  kind           TEXT NOT NULL,           -- bounded（满足共享货量/车辆限制）/ lower_bound（忽略共享限制的下界）
+  input_revision INT NOT NULL,
+  status         TEXT NOT NULL,           -- optimal / feasible（提前停止的可行方案）/ invalidated / selected / locked / superseded
+  objective      JSONB NOT NULL,
+  allocation     JSONB NOT NULL,
+  hourly_gap     JSONB NOT NULL,
+  vehicle_usage  JSONB NOT NULL,
+  iterations     INT NOT NULL,
+  elapsed_ms     INT NOT NULL,
+  node_limit_hit BOOLEAN NOT NULL DEFAULT FALSE,
+  created_by     TEXT NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- 应急单：状态与货源承诺、计算方案分别记录；区域负责人确认费用后才锁定数量
+CREATE TABLE IF NOT EXISTS emergency_orders (
+  id             SERIAL PRIMARY KEY,
+  case_id        INT NOT NULL REFERENCES emergency_cases(id) ON DELETE CASCADE,
+  plan_id        INT NOT NULL REFERENCES emergency_plans(id),
+  store_id       INT NOT NULL REFERENCES stores(id),
+  arrival_date   DATE NOT NULL,
+  status         TEXT NOT NULL DEFAULT 'awaiting_confirmation', -- awaiting_confirmation / confirmed / invalidated / cancelled
+  total_cost     NUMERIC NOT NULL,
+  selected_by    TEXT NOT NULL,
+  selected_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  confirmed_by   TEXT,
+  confirmed_at   TIMESTAMPTZ,
+  cancelled_by   TEXT,
+  cancelled_at   TIMESTAMPTZ,
+  cancel_reason  TEXT,
+  cancel_prompt  BOOLEAN NOT NULL DEFAULT FALSE,  -- 原单晚到 → 重新提示是否取消应急单
+  note           TEXT
+);
+
+-- 同一批货不能同时分给两个方案：一个推演会话至多一张待确认/已确认应急单
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_emergency_active_order
+  ON emergency_orders(case_id) WHERE status IN ('awaiting_confirmation','confirmed');
+
+CREATE TABLE IF NOT EXISTS emergency_commitments (
+  id             SERIAL PRIMARY KEY,
+  order_id       INT NOT NULL REFERENCES emergency_orders(id) ON DELETE CASCADE,
+  source_id      INT NOT NULL REFERENCES emergency_sources(id),
+  boxes          INT NOT NULL,
+  status         TEXT NOT NULL DEFAULT 'proposed',  -- proposed / locked / shipped / released / invalidated
+  received_boxes NUMERIC NOT NULL DEFAULT 0,
+  UNIQUE(order_id, source_id)
+);
+
+-- 随附事件应用日志：同一事件重复应用幂等
+CREATE TABLE IF NOT EXISTS emergency_events (
+  id         SERIAL PRIMARY KEY,
+  case_id    INT NOT NULL REFERENCES emergency_cases(id) ON DELETE CASCADE,
+  event_key  TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  payload    JSONB NOT NULL,
+  applied    BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(case_id, event_key)
+);
+
+-- 兼容旧库：补充字段（幂等）
+ALTER TABLE emergency_orders ADD COLUMN IF NOT EXISTS cancel_prompt BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE emergency_sources ADD COLUMN IF NOT EXISTS unit_cost NUMERIC NOT NULL DEFAULT 0;

@@ -1,0 +1,282 @@
+{
+  "note": "随附数据：配送异常场景的少送比例、分时需求曲线、货源登记与供货/收货事件。事件必须在页面逐条应用才生效；应用供货减少或车辆晚到会触发输入修订号变化，使旧计算立即失效。此处不含任何预写推荐结果。",
+  "demandMultiplier": 1.0,
+  "shortDeliveryRatios": {
+    "BOC01": 0.4,
+    "SHC02": 0.35,
+    "YMC03": 0.4,
+    "XBC04": 0.35,
+    "TD05": 0.4,
+    "HL06": 0.5,
+    "BL07": 0,
+    "YC08": 0
+  },
+  "hourlyProfiles": {
+    "LEAFY": {
+      "start": "08:00",
+      "end": "18:00",
+      "weights": [
+        0.08,
+        0.1,
+        0.12,
+        0.14,
+        0.13,
+        0.11,
+        0.08,
+        0.09,
+        0.08,
+        0.07
+      ]
+    },
+    "ROOT": {
+      "start": "08:00",
+      "end": "21:00",
+      "weights": [
+        0.06,
+        0.07,
+        0.08,
+        0.09,
+        0.09,
+        0.08,
+        0.07,
+        0.07,
+        0.08,
+        0.08,
+        0.07,
+        0.08,
+        0.08
+      ]
+    }
+  },
+  "vehicle": {
+    "freightPerVehicle": 90,
+    "weightCapKg": 220,
+    "volumeCapM3": 1.0,
+    "maxVehiclesPerSlot": 1
+  },
+  "sources": [
+    {
+      "code": "L1",
+      "supplier": "晨光批发",
+      "skuCode": "BOC01",
+      "targetSkuCode": "BOC01",
+      "availableBoxes": 6,
+      "unitsPerBox": 10,
+      "substitutionRatio": 1,
+      "arrivalTime": "08:30",
+      "weightPerBox": 8,
+      "volumePerBox": 0.05,
+      "sourceUnit": "箱",
+      "vehicleSlot": "AM",
+      "note": "主供菠菜，早班车",
+      "unitCost": 45
+    },
+    {
+      "code": "L2",
+      "supplier": "城南合作社",
+      "skuCode": "BOC01",
+      "targetSkuCode": "BOC01",
+      "availableBoxes": 4,
+      "unitsPerBox": 10,
+      "substitutionRatio": 1,
+      "arrivalTime": "10:00",
+      "weightPerBox": 8,
+      "volumePerBox": 0.05,
+      "sourceUnit": "箱",
+      "vehicleSlot": "AM",
+      "note": "菠菜第二来源",
+      "unitCost": 42
+    },
+    {
+      "code": "L3",
+      "supplier": "晨光批发",
+      "skuCode": "SHC02",
+      "targetSkuCode": "SHC02",
+      "availableBoxes": 5,
+      "unitsPerBox": 8,
+      "substitutionRatio": 1,
+      "arrivalTime": "08:30",
+      "weightPerBox": 6,
+      "volumePerBox": 0.06,
+      "sourceUnit": "箱",
+      "vehicleSlot": "AM",
+      "note": "生菜，早班车",
+      "unitCost": 36
+    },
+    {
+      "code": "L4",
+      "supplier": "午市配送",
+      "skuCode": "YMC03",
+      "targetSkuCode": "YMC03",
+      "availableBoxes": 5,
+      "unitsPerBox": 8,
+      "substitutionRatio": 1,
+      "arrivalTime": "13:00",
+      "weightPerBox": 6,
+      "volumePerBox": 0.06,
+      "sourceUnit": "箱",
+      "vehicleSlot": "PM",
+      "note": "油麦菜，午市车",
+      "unitCost": 36
+    },
+    {
+      "code": "L5",
+      "supplier": "小农直供",
+      "skuCode": "XBC04",
+      "targetSkuCode": "XBC04",
+      "availableBoxes": 4,
+      "unitsPerBox": 6,
+      "substitutionRatio": 1,
+      "arrivalTime": "09:30",
+      "weightPerBox": 7,
+      "volumePerBox": 0.05,
+      "sourceUnit": "箱",
+      "vehicleSlot": "AM",
+      "note": "小白菜，早班车",
+      "unitCost": 30
+    },
+    {
+      "code": "L6",
+      "supplier": "城北菜场",
+      "skuCode": "SHC02",
+      "targetSkuCode": "BOC01",
+      "availableBoxes": 4,
+      "unitsPerBox": 8,
+      "substitutionRatio": 0.8,
+      "arrivalTime": "11:00",
+      "weightPerBox": 6,
+      "volumePerBox": 0.05,
+      "sourceUnit": "箱",
+      "vehicleSlot": "MID",
+      "note": "生菜替代菠菜：1 箱生菜按 0.8 折算可覆盖 6.4 份菠菜需求",
+      "unitCost": 38
+    },
+    {
+      "code": "L7",
+      "supplier": "晨光批发",
+      "skuCode": "TD05",
+      "targetSkuCode": "TD05",
+      "availableBoxes": 4,
+      "unitsPerBox": 5,
+      "substitutionRatio": 1,
+      "arrivalTime": "08:30",
+      "weightPerBox": 2,
+      "volumePerBox": 0.05,
+      "sourceUnit": "箱",
+      "vehicleSlot": "AM",
+      "note": "土豆，早班车",
+      "unitCost": 20
+    },
+    {
+      "code": "L8",
+      "supplier": "城南合作社",
+      "skuCode": "TD05",
+      "targetSkuCode": "TD05",
+      "availableBoxes": 3,
+      "unitsPerBox": 5,
+      "substitutionRatio": 1,
+      "arrivalTime": "10:00",
+      "weightPerBox": 2,
+      "volumePerBox": 0.05,
+      "sourceUnit": "箱",
+      "vehicleSlot": "AM",
+      "note": "土豆第二来源",
+      "unitCost": 19
+    },
+    {
+      "code": "L9",
+      "supplier": "晚市补货",
+      "skuCode": "BOC01",
+      "targetSkuCode": "BOC01",
+      "availableBoxes": 3,
+      "unitsPerBox": 10,
+      "substitutionRatio": 1,
+      "arrivalTime": "18:20",
+      "weightPerBox": 8,
+      "volumePerBox": 0.05,
+      "sourceUnit": "箱",
+      "vehicleSlot": "EVE",
+      "note": "到货晚于叶菜销售时段 08:00–18:00，登记后按规则排除",
+      "unitCost": 41
+    },
+    {
+      "code": "L10",
+      "supplier": "散装筐",
+      "skuCode": "BOC01",
+      "targetSkuCode": "BOC01",
+      "availableBoxes": 3,
+      "unitsPerBox": 0,
+      "substitutionRatio": 1,
+      "arrivalTime": "09:00",
+      "weightPerBox": 9,
+      "volumePerBox": 0.06,
+      "sourceUnit": "筐",
+      "vehicleSlot": "AM",
+      "note": "以筐散装、未给整箱规格，单位无法换算，登记后按规则排除",
+      "unitCost": 40
+    },
+    {
+      "code": "L11",
+      "supplier": "根茎补货",
+      "skuCode": "HL06",
+      "targetSkuCode": "HL06",
+      "availableBoxes": 4,
+      "unitsPerBox": 5,
+      "substitutionRatio": 1,
+      "arrivalTime": "12:00",
+      "weightPerBox": 3,
+      "volumePerBox": 0.04,
+      "sourceUnit": "箱",
+      "vehicleSlot": "PM",
+      "note": "胡萝卜，午市车",
+      "unitCost": 25
+    }
+  ],
+  "events": [
+    {
+      "eventType": "supply_decrease",
+      "title": "供货量减少：L1 晨光批发 菠菜可供箱数 6 → 3",
+      "payload": {
+        "sourceCode": "L1",
+        "availableBoxes": 3
+      }
+    },
+    {
+      "eventType": "vehicle_delay",
+      "title": "车辆晚到：PM 车次延误 2 小时（L4 / L11 到达时刻顺延）",
+      "payload": {
+        "slot": "PM",
+        "delayHours": 2
+      }
+    },
+    {
+      "eventType": "original_order_late",
+      "title": "原确认订单晚到：司机反馈原单将晚于销售开始到达",
+      "payload": {
+        "note": "原单晚到，需重新提示应急单是否取消"
+      }
+    },
+    {
+      "eventType": "receipt",
+      "title": "部分到货：城南合作社 菠菜 2 箱已到（回执 R-001）",
+      "payload": {
+        "sourceCode": "L2",
+        "boxes": 2,
+        "receiptKey": "R-001",
+        "arrivalTime": "10:30"
+      }
+    },
+    {
+      "eventType": "receipt_duplicate",
+      "title": "重复收货事件：同一回执 R-001 再次上报（应幂等，不计库存）",
+      "payload": {
+        "sourceCode": "L2",
+        "boxes": 2,
+        "receiptKey": "R-001",
+        "arrivalTime": "10:35"
+      }
+    }
+  ],
+  "originalArrival": "08:00",
+  "originalLateArrival": "11:00"
+}

@@ -7,6 +7,7 @@ import LoginPage from './pages/LoginPage';
 import SamplesPage from './pages/SamplesPage';
 import SuggestionsPage from './pages/SuggestionsPage';
 import ReviewPage from './pages/ReviewPage';
+import EmergencyPage from './pages/EmergencyPage';
 import FilterBar from './components/FilterBar';
 
 function Shell() {
@@ -24,6 +25,7 @@ function Shell() {
           <NavLink to="/samples">需求还原</NavLink>
           <NavLink to="/suggestions">建议与订货</NavLink>
           <NavLink to="/review">收市复盘</NavLink>
+          <NavLink to="/emergency">应急订货</NavLink>
         </nav>
         <div className="user">
           <span>
@@ -39,6 +41,7 @@ function Shell() {
           <Route path="/samples" element={<SamplesPage meta={meta} />} />
           <Route path="/suggestions" element={<SuggestionsPage meta={meta} />} />
           <Route path="/review" element={<ReviewPage meta={meta} />} />
+          <Route path="/emergency" element={<EmergencyPage meta={meta} />} />
           <Route path="*" element={<Navigate to="/suggestions" replace />} />
         </Routes>
       </main>

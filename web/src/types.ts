@@ -97,3 +97,72 @@ export const TRIGGER_EVENTS: Record<string, string> = {
 };
 
 export const REASON_CODES = ['天气原因', '促销调整', '竞品影响', '库存压力', '经验加量', '经验减量', '其他'];
+
+// ===== 配送异常应急订货 =====
+export interface EmergencySku {
+  id: number; code: string; name: string; unit: string;
+  categoryId: number; categoryCode: string; categoryName: string;
+  cu: number; co: number; salesStart: string; salesEnd: string;
+  priority: number; shortDeliveryRatio: number; dailyDemandBase: number; demandSource: string;
+  hourlyProfile: { start: string; end: string; weights: number[] };
+}
+export interface EmergencySource {
+  id: number; case_id: number; code: string; supplier: string;
+  sku_id: number; sku_code: string; sku_name: string;
+  target_sku_id: number; target_sku_code: string; target_sku_name: string; target_category_code: string;
+  available_boxes: string; units_per_box: string; substitution_ratio: string;
+  arrival_time: string; weight_per_box: string; volume_per_box: string;
+  source_unit: string; vehicle_slot: string; unit_cost: string; delay_hours: string;
+  status: 'registered' | 'excluded'; exclude_reason: string | null; note: string | null;
+}
+export interface EmergencyReceipt {
+  id: number; case_id: number; source_id: number; source_code: string; receipt_key: string;
+  boxes: string; arrival_time: string; received_at: string;
+}
+export interface EmergencyPlanRow {
+  id: number; case_id: number; kind: 'bounded' | 'lower_bound';
+  input_revision: number; status: string;
+  objective: Record<string, unknown>; allocation: Record<string, number>;
+  hourly_gap: unknown; vehicle_usage: unknown;
+  iterations: number; elapsed_ms: number; node_limit_hit: boolean;
+  created_by: string; created_at: string;
+}
+export interface EmergencyOrderRow {
+  id: number; case_id: number; plan_id: number; store_id: number; arrival_date: string;
+  status: 'awaiting_confirmation' | 'confirmed' | 'invalidated' | 'cancelled';
+  total_cost: string; selected_by: string; selected_at: string;
+  confirmed_by: string | null; confirmed_at: string | null;
+  cancelled_by: string | null; cancelled_at: string | null;
+  cancel_reason: string | null; cancel_prompt: boolean; note: string | null;
+}
+export interface EmergencyCommitment {
+  id: number; order_id: number; source_id: number; source_code: string; supplier: string;
+  boxes: number; status: string; received_boxes: string;
+}
+export interface EmergencyEvent {
+  key: string; eventType: string; title: string; payload: Record<string, unknown>;
+  applied: boolean;
+}
+export interface EmergencyResponse {
+  case: {
+    id: number; storeId: number; arrivalDate: string; inputRevision: number;
+    demandMultiplier: number; originalOrderLate: boolean; priorities: Record<string, number>;
+  };
+  scenario: {
+    demandMultiplier: number; originalArrival: string; originalLateArrival: string;
+    shortDeliveryRatios: Record<string, number>;
+    hourlyProfiles: Record<string, { start: string; end: string; weights: number[] }>;
+    vehicle: { freightPerVehicle: number; weightCapKg: number; volumeCapM3: number; maxVehiclesPerSlot: number };
+  };
+  originalOrder: null | {
+    id: number; versionNo: number; confirmedBy: string; confirmedAt: string; status: string;
+    items: { sku_id: number; qty: string; suggested_qty: string; sku_code: string; sku_name: string; unit: string }[];
+  };
+  skus: EmergencySku[];
+  sources: EmergencySource[];
+  receipts: EmergencyReceipt[];
+  plans: EmergencyPlanRow[];
+  emergencyOrder: EmergencyOrderRow | null;
+  commitments: EmergencyCommitment[];
+  events: EmergencyEvent[];
+}

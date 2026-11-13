@@ -247,5 +247,32 @@ export async function seedIfEmpty(): Promise<void> {
       triggerEvent: 'manual', features: {}, createdBy: 'seed',
     });
   }
+
+  // 6) 三门店明天订单均已确认（应急推演以「原确认订单」为少送基准；原单始终不变）
+  const managerOf: Record<string, string> = { BJ01: 'store1', BJ02: 'store2', BJ03: 'store3' };
+  for (const s of storeRows) {
+    const tomorrowSug = await pool().query(
+      `SELECT si.sku_id, si.suggested_qty FROM suggestion_items si
+         JOIN suggestion_versions v ON v.id=si.version_id
+         JOIN suggestion_tables t ON t.id=v.table_id
+        WHERE t.store_id=$1 AND t.arrival_date=$2 ORDER BY si.sku_id`,
+      [s.id, tomorrow],
+    );
+    const version = await pool().query(
+      `SELECT v.id FROM suggestion_versions v JOIN suggestion_tables t ON t.id=v.table_id
+        WHERE t.store_id=$1 AND t.arrival_date=$2 ORDER BY v.version_no DESC LIMIT 1`,
+      [s.id, tomorrow],
+    );
+    await confirmOrder({
+      versionId: version.rows[0].id,
+      idempotencyKey: `seed-order-tomorrow-s${s.id}`,
+      confirmedBy: managerOf[s.code] ?? 'store1',
+      items: tomorrowSug.rows.map((r: { sku_id: number; suggested_qty: string }) => ({
+        skuId: r.sku_id, qty: Number(r.suggested_qty),
+      })),
+    });
+  }
+
+  // 7) 应急推演会话按需建立：打开页面时才载入随附场景与货源登记
   console.log('[seed] 演示业务流完成');
 }

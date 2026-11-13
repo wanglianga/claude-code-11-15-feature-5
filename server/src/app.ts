@@ -3,6 +3,16 @@ import { pool } from './db';
 import { requireAuth, requireRole, scopeStoreId, signToken, verifyPassword } from './auth';
 import { confirmOrder, generateSuggestion, ConflictError, NotFoundError } from './services/suggestionService';
 import { addStocktake, addWasteRecord, createReview, submitReviewEntry } from './services/reviewService';
+import {
+  applyEvent as applyEmergencyEvent,
+  cancelEmergencyOrder,
+  confirmEmergencyOrder,
+  openEmergency,
+  registerSource,
+  selectPlan,
+  setPriorities,
+  submitPlan,
+} from './services/emergencyService';
 
 function num(v: unknown, name: string): number {
   const n = Number(v);
@@ -298,6 +308,109 @@ export function createApp() {
     } catch (e) { next(e); }
   });
 
+  // ---------- 配送异常应急订货推演 ----------
+  app.get('/api/emergency', async (req, res, next) => {
+    try {
+      const storeId = resolveStore(req, req.query.storeId);
+      const arrivalDate = str(req.query.arrivalDate, 'arrivalDate');
+      res.json(await openEmergency(storeId, arrivalDate));
+    } catch (e) { next(e); }
+  });
+
+  // 货源登记（整箱规格/替代比例/到达时刻/重量/冷藏容积）
+  app.post('/api/emergency/sources', requireRole('manager'), async (req, res, next) => {
+    try {
+      const storeId = resolveStore(req, req.body?.storeId);
+      res.json(await registerSource(storeId, str(req.body?.arrivalDate, 'arrivalDate'), {
+        code: str(req.body?.code, 'code').toUpperCase(),
+        supplier: str(req.body?.supplier, 'supplier'),
+        skuCode: str(req.body?.skuCode, 'skuCode'),
+        targetSkuCode: str(req.body?.targetSkuCode, 'targetSkuCode'),
+        availableBoxes: num(req.body?.availableBoxes, 'availableBoxes'),
+        unitsPerBox: num(req.body?.unitsPerBox, 'unitsPerBox'),
+        substitutionRatio: num(req.body?.substitutionRatio, 'substitutionRatio'),
+        arrivalTime: str(req.body?.arrivalTime, 'arrivalTime'),
+        weightPerBox: num(req.body?.weightPerBox, 'weightPerBox'),
+        volumePerBox: num(req.body?.volumePerBox, 'volumePerBox'),
+        sourceUnit: optStr(req.body?.sourceUnit) ?? '箱',
+        vehicleSlot: str(req.body?.vehicleSlot, 'vehicleSlot'),
+        unitCost: req.body?.unitCost === undefined ? 0 : num(req.body?.unitCost, 'unitCost'),
+        note: optStr(req.body?.note) ?? undefined,
+      }, req.user!.username));
+    } catch (e) { next(e); }
+  });
+
+  // 商品优先级（1 最低 – 5 最高），变化 → 输入修订号自增
+  app.post('/api/emergency/priorities', requireRole('manager'), async (req, res, next) => {
+    try {
+      const storeId = resolveStore(req, req.body?.storeId);
+      const raw = req.body?.priorities;
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+        throw new ConflictError('BAD_REQUEST', '参数 priorities 缺失或非法');
+      }
+      res.json(await setPriorities(storeId, str(req.body?.arrivalDate, 'arrivalDate'), raw as Record<string, number>));
+    } catch (e) { next(e); }
+  });
+
+  // 应用随附数据事件（供货减少 / 车辆晚到 / 部分到货 / 重复收货 / 原单晚到）
+  app.post('/api/emergency/events/:key/apply', requireRole('manager'), async (req, res, next) => {
+    try {
+      const storeId = resolveStore(req, req.body?.storeId);
+      res.json(await applyEmergencyEvent(storeId, str(req.body?.arrivalDate, 'arrivalDate'), req.params.key));
+    } catch (e) { next(e); }
+  });
+
+  // 回传浏览器组合搜索结果（核对输入修订号与可供箱数）
+  app.post('/api/emergency/plans', requireRole('manager'), async (req, res, next) => {
+    try {
+      const storeId = resolveStore(req, req.body?.storeId);
+      const b = req.body ?? {};
+      const kind = str(b.kind, 'kind');
+      if (kind !== 'bounded' && kind !== 'lower_bound') {
+        throw new ConflictError('BAD_REQUEST', '参数 kind 非法');
+      }
+      res.json(await submitPlan(storeId, str(b.arrivalDate, 'arrivalDate'), {
+        inputRevision: num(b.inputRevision, 'inputRevision'),
+        kind,
+        status: str(b.status, 'status') as 'optimal' | 'feasible' | 'lower_bound',
+        objective: (b.objective ?? {}) as Record<string, unknown>,
+        allocation: (b.allocation ?? {}) as Record<string, number>,
+        hourlyGap: b.hourlyGap ?? {},
+        vehicleUsage: b.vehicleUsage ?? {},
+        iterations: b.iterations === undefined ? 0 : num(b.iterations, 'iterations'),
+        elapsedMs: b.elapsedMs === undefined ? 0 : num(b.elapsedMs, 'elapsedMs'),
+        nodeLimitHit: Boolean(b.nodeLimitHit),
+      }, req.user!.username));
+    } catch (e) { next(e); }
+  });
+
+  // 店长选货 → 待确认应急单
+  app.post('/api/emergency/plans/:id/select', requireRole('manager'), async (req, res, next) => {
+    try {
+      const storeId = resolveStore(req, req.body?.storeId);
+      res.json(await selectPlan(storeId, str(req.body?.arrivalDate, 'arrivalDate'), num(req.params.id, 'id'), req.user!.username));
+    } catch (e) { next(e); }
+  });
+
+  // 区域负责人（总部）确认费用 → 锁定本次选货数量
+  app.post('/api/emergency/orders/:id/confirm', requireRole('hq'), async (req, res, next) => {
+    try {
+      const storeId = resolveStore(req, req.body?.storeId);
+      res.json(await confirmEmergencyOrder(storeId, str(req.body?.arrivalDate, 'arrivalDate'), num(req.params.id, 'id'), req.user!.username));
+    } catch (e) { next(e); }
+  });
+
+  // 取消应急单：已发货部分不直接释放
+  app.post('/api/emergency/orders/:id/cancel', async (req, res, next) => {
+    try {
+      const storeId = resolveStore(req, req.body?.storeId);
+      res.json(await cancelEmergencyOrder(
+        storeId, str(req.body?.arrivalDate, 'arrivalDate'), num(req.params.id, 'id'),
+        req.user!.username, optStr(req.body?.reason) ?? '手工取消',
+      ));
+    } catch (e) { next(e); }
+  });
+
   // ---------- 统一错误处理 ----------
   app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     if (err instanceof ConflictError) {
@@ -310,6 +423,10 @@ export function createApp() {
       return;
     }
     console.error(err);
+    if (process.env.NODE_ENV === 'test') {
+      res.status(500).json({ error: { code: 'INTERNAL', message: '服务器内部错误', details: String((err as Error).stack ?? err) } });
+      return;
+    }
     res.status(500).json({ error: { code: 'INTERNAL', message: '服务器内部错误' } });
   });
 
